@@ -80,10 +80,11 @@ class NotePad(QMainWindow, Ui_NotePad):
     # Open File
     def open_file(self):
         try:
-            path, _ = QFileDialog.getOpenFileName(self, 'Open a File', ':\\')
+            default_dir = os.path.expanduser('~')
+            path, _ = QFileDialog.getOpenFileName(self, 'Open a File', default_dir, "Text Files (*.txt);; All Files (*.*)")
             if path:
                 self.path = path 
-                with open(path, 'r') as file:
+                with open(path, 'r', encoding='utf-8', errors='ignore') as file:
                     content = file.read()
                     self.textEdit.setText(content)
                     self.filename = os.path.basename(self.path)
@@ -94,12 +95,13 @@ class NotePad(QMainWindow, Ui_NotePad):
     # Save File
     def save_file(self):
         try:
-            if self.path == '':     # If no file is opened, the call save as function
+            if not self.path:     # If no file is opened, then call save as function
                 self.save_file_as()
+                return
             
             content = self.textEdit.toPlainText().strip()
         
-            with open(self.path, 'w') as file:
+            with open(self.path, 'w', encoding='utf-8') as file:
                 file.write(content)
                 self.statusbar.showMessage(f'{self.filename} has been saved successfully')
                 self.update_title()
@@ -109,19 +111,20 @@ class NotePad(QMainWindow, Ui_NotePad):
     # Save As
     def save_file_as(self):
         try:
-            path, _ = QFileDialog.getSaveFileName(self, 'Save file as', ':\\', 
+            default_dir = os.path.expanduser('~')
+            path, _ = QFileDialog.getSaveFileName(self, 'Save file as', default_dir, 
                                                   "Text Files (*.txt);; All Files (*.*)"
                                                   )
             if path:
                 content = self.textEdit.toPlainText().strip()
                 self.path = path
                 self.filename = os.path.basename(self.path)
-                with open(self.path, 'w') as file:
+                with open(self.path, 'w', encoding='utf-8') as file:
                     file.write(content)
                     self.statusbar.showMessage(f'{self.filename} has been saved successfully')
                     self.update_title()
         except Exception as e:
-            print(f'Error saveing file as: {e}')
+            print(f'Error saving file as: {e}')
             
     # Bold
     def bold(self):
@@ -210,8 +213,9 @@ class NotePad(QMainWindow, Ui_NotePad):
     
     # Export to PDF
     def export_to_pdf(self):
-        file, _ = QFileDialog.getSaveFileName(self, "Export to PDF", ':\\', 
-                                              'PDF Files;; All Files'
+        default_dir = os.path.expanduser('~')
+        file, _ = QFileDialog.getSaveFileName(self, "Export to PDF", default_dir, 
+                                              'PDF Files (*.pdf);; All Files (*.*)'
                                               )
         if file:
             if QFileInfo(file).suffix() == "":
@@ -234,11 +238,12 @@ class NotePad(QMainWindow, Ui_NotePad):
     # Prompt user to save on exit
     def closeEvent(self, event):
         try:
+            current_text = self.textEdit.toPlainText()
             # No file opened and NotePad empty
-            if not self.filename and self.textEdit.toPlainText() == "":
-                sys.exit()              
+            if not self.filename and current_text.strip() == "":
+                event.accept()             
             # Save a new file
-            elif not self.filename and self.textEdit.toPlainText() != "":
+            elif not self.filename and current_text.strip() != "":
                 ask = QMessageBox.question(
                     self, 'Save File Before Closing',
                     'This new document has not been saved. Do you want to save it before closing?',
@@ -246,13 +251,16 @@ class NotePad(QMainWindow, Ui_NotePad):
                 )
                 if ask == QMessageBox.Yes:
                     self.save_file()
-                    sys.exit()
+                    if self.path:
+                        event.accept()
+                    else:
+                        event.ignore()
                 elif ask == QMessageBox.Cancel:
-                    QtGui.QCloseEvent.ignore(event)
+                    event.ignore()
                 else:
-                    sys.exit()
+                    event.accept()
             # Save a modified file
-            elif file_changed(self.path, self.textEdit.toPlainText().strip()):
+            elif file_changed(self.path, current_text.strip()):
                 ask = QMessageBox.question(
                     self, 'Save File Before Closing',
                     f'{self.filename} has been modified. Do you want to save changes before closing?',
@@ -260,15 +268,16 @@ class NotePad(QMainWindow, Ui_NotePad):
                 )
                 if ask == QMessageBox.Yes:
                     self.save_file()
-                    sys.exit()
+                    event.accept()
                 elif ask == QMessageBox.Cancel:
-                    QtGui.QCloseEvent.ignore(event)
+                    event.ignore()
                 else:
-                    sys.exit()
+                    event.accept()
             else:
-                sys.exit()
+                event.accept()
         except Exception as e:
             print(f"Close event error: {e}")
+            event.accept()
             
     # 
                     

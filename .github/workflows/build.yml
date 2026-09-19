@@ -1,0 +1,99 @@
+name: Build NotePad (Windows .exe & macOS .dmg)
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyqt5 pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          python -m PyInstaller --clean --noconfirm NotePad.spec
+
+      - name: Prepare Windows artifact
+        shell: bash
+        run: |
+          mv dist/NotePad.exe dist/NotePad-Windows-x64.exe
+
+      - name: Upload Windows Executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotePad-Windows-x64
+          path: dist/NotePad-Windows-x64.exe
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS Apple Silicon (.dmg)
+    runs-on: macos-14
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyqt5 pyinstaller pillow
+
+      - name: Build macOS App and DMG
+        run: |
+          chmod +x build_macos.sh
+          ./build_macos.sh
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotePad-macOS-arm64
+          path: dist/NotePad-macOS-arm64.dmg
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: [build-windows, build-macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Release to GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/NotePad-Windows-x64/NotePad-Windows-x64.exe
+            artifacts/NotePad-macOS-arm64/NotePad-macOS-arm64.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
